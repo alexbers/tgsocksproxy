@@ -224,19 +224,13 @@ async def handle_client(reader, writer):
     asyncio.ensure_future(reader_to_tgt_writer(reader, writer_tgt))
 
 
-def get_my_ip():
-    try:
-        with urllib.request.urlopen("http://ifconfig.co/ip") as r:
-            return r.read().decode().strip()
-    except Exception:
-        return "127.0.0.1"
-
-
 def print_tg_info():
+    my_ip = socket.gethostbyname(socket.gethostname())
     params = {
-        "server": get_my_ip(), "port": PORT, "user": USER, "pass": PASSWORD
+        "server": my_ip, "port": PORT, "user": USER, "pass": PASSWORD
     }
     print("tg://socks?" + urllib.parse.urlencode(params), flush=True)
+
 
 def main():
     loop = asyncio.get_event_loop()
