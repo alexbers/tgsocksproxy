@@ -8,5 +8,7 @@ COPY tgsocksproxy.py config.py /home/tgsocks/
 
 RUN chown -R tgsocks:tgsocks /home/tgsocks
 
+USER tgsocks
+
 WORKDIR /home/tgsocks/
 CMD ["./tgsocksproxy.py"]
