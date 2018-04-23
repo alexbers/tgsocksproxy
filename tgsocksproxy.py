@@ -208,7 +208,7 @@ async def handle_client(reader, writer):
                 else:
                     wr.write(data)
                     await wr.drain()
-        except ConnectionResetError:
+        except (ConnectionResetError, AttributeError, BrokenPipeError):
             wr.close()
 
     asyncio.ensure_future(connect_reader_to_writer(reader_tgt, writer))
