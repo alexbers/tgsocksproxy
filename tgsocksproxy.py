@@ -196,32 +196,23 @@ async def handle_client(reader, writer):
         writer.close()
         return
 
-    async def tgt_reader_to_writer(reader_tgt, writer):
-        while True:
-            data = await reader_tgt.read(READ_BUF_SIZE)
-            if not data:
-                writer.write_eof()
-                await writer.drain()
-                writer.close()
-                return
-            else:
-                writer.write(data)
-                await writer.drain()
+    async def connect_reader_to_writer(rd, wr):
+        try:
+            while True:
+                data = await rd.read(READ_BUF_SIZE)
+                if not data:
+                    wr.write_eof()
+                    await wr.drain()
+                    wr.close()
+                    return
+                else:
+                    wr.write(data)
+                    await wr.drain()
+        except ConnectionResetError:
+            wr.close()
 
-    async def reader_to_tgt_writer(reader, writer_tgt):
-        while True:
-            data = await reader.read(READ_BUF_SIZE)
-            if not data:
-                writer_tgt.write_eof()
-                await writer_tgt.drain()
-                writer_tgt.close()
-                break
-            else:
-                writer_tgt.write(data)
-                await writer_tgt.drain()
-
-    asyncio.ensure_future(tgt_reader_to_writer(reader_tgt, writer))
-    asyncio.ensure_future(reader_to_tgt_writer(reader, writer_tgt))
+    asyncio.ensure_future(connect_reader_to_writer(reader_tgt, writer))
+    asyncio.ensure_future(connect_reader_to_writer(reader, writer_tgt))
 
 
 async def handle_client_wrapper(reader, writer):
