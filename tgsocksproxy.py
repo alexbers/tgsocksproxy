@@ -225,7 +225,7 @@ async def handle_client(reader, writer):
         writer.close()
         return
 
-    update_and_print_stats(user, connects=1, curr_connects_x2=2)
+    update_and_print_stats(user, connects=1)
 
     reader_tgt, writer_tgt = await handle_request(reader, writer)
     if reader_tgt is None or writer_tgt is None:
@@ -233,6 +233,7 @@ async def handle_client(reader, writer):
         return
 
     async def connect_reader_to_writer(rd, wr, user):
+        update_and_print_stats(user, curr_connects_x2=1)
         try:
             while True:
                 data = await rd.read(READ_BUF_SIZE)
