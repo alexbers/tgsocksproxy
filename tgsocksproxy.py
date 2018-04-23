@@ -5,6 +5,8 @@ import struct
 import socket
 import urllib.parse
 import urllib.request
+import collections
+import time
 
 from config import PORT, USERS
 
@@ -16,9 +18,11 @@ TG_NETWORKS = {
     "149.154.160.0", "149.154.164.0", "149.154.168.0", "149.154.172.0"
 }
 
+STATS_PRINT_PERIOD = 10
+
 PRINT_TG_INFO = True
 
-READ_BUF_SIZE = 4096
+READ_BUF_SIZE = 16384
 
 IPV4_ADDR_LEN = 4
 IPV6_ADDR_LEN = 16
@@ -68,6 +72,35 @@ def validate_addr(addr, addr_type):
 
     return True
 
+
+def init_stats():
+    global stats
+    global last_stats_time
+    stats = {user: collections.Counter() for user in USERS}
+    last_stats_time = time.time()
+
+
+def update_and_print_stats(user, connects=0, curr_connects_x2=0, octets=0):
+    global stats
+    global last_stats_time
+
+    if user not in stats:
+        stats[user] = collections.Counter()
+
+    stats[user].update(connects=connects, curr_connects_x2=curr_connects_x2,
+                       octets=octets)
+
+    if time.time() - last_stats_time > STATS_PRINT_PERIOD:
+        last_stats_time = time.time()
+
+        print("Stats for", time.strftime("%d.%m.%Y %H:%M:%S"))
+        for user, stat in stats.items():
+            print("%s: %d connects (%d current), %.2f MB" % (
+                user, stat["connects"], stat["curr_connects_x2"] // 2,
+                stat["octets"] // 1000000))
+        print(flush=True)
+
+
 async def initial_handshake(reader, writer):
     socks_version = await reader.readexactly(1)
     if socks_version != SOCKS5_VERSION:
@@ -89,31 +122,31 @@ async def initial_handshake(reader, writer):
     return True
 
 
-async def login_password_subnegotiation(reader, writer):
+async def negotiate_login(reader, writer):
     subnegotiation_version = await reader.readexactly(1)
 
     if subnegotiation_version != SUBNEGOTIATION_VERSION:
-        return False
+        return ""
 
     user_len = struct.unpack("!B", await reader.readexactly(1))[0]
     if user_len == 0:
-        return False
+        return ""
 
     user = (await reader.readexactly(user_len)).decode(errors="ignore")
 
     password_len = struct.unpack("!B", await reader.readexactly(1))[0]
     if password_len == 0:
-        return False
+        return ""
 
     password = (await reader.readexactly(password_len)).decode(errors="ignore")
 
     if user not in USERS or password != USERS[user]:
         writer.write(SUBNEGOTIATION_VERSION + STATUS_FAIL)
         await writer.drain()
-        return False
+        return ""
 
     writer.write(SUBNEGOTIATION_VERSION + STATUS_SUCCESS)
-    return True
+    return user
 
 
 async def handle_request(reader, writer):
@@ -187,16 +220,19 @@ async def handle_client(reader, writer):
         writer.close()
         return
 
-    if not await login_password_subnegotiation(reader, writer):
+    user = await negotiate_login(reader, writer)
+    if not user:
         writer.close()
         return
+
+    update_and_print_stats(user, connects=1, curr_connects_x2=2)
 
     reader_tgt, writer_tgt = await handle_request(reader, writer)
     if reader_tgt is None or writer_tgt is None:
         writer.close()
         return
 
-    async def connect_reader_to_writer(rd, wr):
+    async def connect_reader_to_writer(rd, wr, user):
         try:
             while True:
                 data = await rd.read(READ_BUF_SIZE)
@@ -206,14 +242,17 @@ async def handle_client(reader, writer):
                     wr.close()
                     return
                 else:
+                    update_and_print_stats(user, octets=len(data))
                     wr.write(data)
                     await wr.drain()
         except (ConnectionResetError, BrokenPipeError, OSError,
                 AttributeError):
             wr.close()
+        finally:
+            update_and_print_stats(user, curr_connects_x2=-1)
 
-    asyncio.ensure_future(connect_reader_to_writer(reader_tgt, writer))
-    asyncio.ensure_future(connect_reader_to_writer(reader, writer_tgt))
+    asyncio.ensure_future(connect_reader_to_writer(reader_tgt, writer, user))
+    asyncio.ensure_future(connect_reader_to_writer(reader, writer_tgt, user))
 
 
 async def handle_client_wrapper(reader, writer):
@@ -244,6 +283,8 @@ def print_tg_info():
 
 
 def main():
+    init_stats()
+
     loop = asyncio.get_event_loop()
     task = asyncio.start_server(handle_client_wrapper,
                                 "0.0.0.0", PORT, loop=loop)
