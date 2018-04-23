@@ -6,7 +6,7 @@ import socket
 import urllib.parse
 import urllib.request
 
-from config import PORT, USER, PASSWORD
+from config import PORT, USERS
 
 BLOCK_NON_TG_HOSTS = True
 
@@ -99,15 +99,15 @@ async def login_password_subnegotiation(reader, writer):
     if user_len == 0:
         return False
 
-    user = await reader.readexactly(user_len)
+    user = (await reader.readexactly(user_len)).decode(errors="ignore")
 
     password_len = struct.unpack("!B", await reader.readexactly(1))[0]
     if password_len == 0:
         return False
 
-    password = await reader.readexactly(password_len)
+    password = (await reader.readexactly(password_len)).decode(errors="ignore")
 
-    if user != USER.encode() or password != PASSWORD.encode():
+    if user not in USERS or password != USERS[user]:
         writer.write(SUBNEGOTIATION_VERSION + STATUS_FAIL)
         await writer.drain()
         return False
@@ -208,7 +208,8 @@ async def handle_client(reader, writer):
                 else:
                     wr.write(data)
                     await wr.drain()
-        except (ConnectionResetError, AttributeError, BrokenPipeError, OSError):
+        except (ConnectionResetError, BrokenPipeError, OSError,
+                AttributeError):
             wr.close()
 
     asyncio.ensure_future(connect_reader_to_writer(reader_tgt, writer))
@@ -220,6 +221,7 @@ async def handle_client_wrapper(reader, writer):
         await handle_client(reader, writer)
     except (asyncio.IncompleteReadError, ConnectionResetError):
         writer.close()
+
 
 def print_tg_info():
     my_ip = socket.gethostbyname(socket.gethostname())
@@ -234,10 +236,11 @@ def print_tg_info():
     if ip_is_local:
         my_ip = "YOUR_IP"
 
-    params = {
-        "server": my_ip, "port": PORT, "user": USER, "pass": PASSWORD
-    }
-    print("tg://socks?" + urllib.parse.urlencode(params), flush=True)
+    for user in USERS:
+        params = {
+            "server": my_ip, "port": PORT, "user": user, "pass": USERS[user]
+        }
+        print("tg://socks?" + urllib.parse.urlencode(params), flush=True)
 
 
 def main():
