@@ -224,6 +224,12 @@ async def handle_client(reader, writer):
     asyncio.ensure_future(reader_to_tgt_writer(reader, writer_tgt))
 
 
+async def handle_client_wrapper(reader, writer):
+    try:
+        await handle_client(reader, writer)
+    except (asyncio.IncompleteReadError, ConnectionResetError):
+        writer.close()
+
 def print_tg_info():
     my_ip = socket.gethostbyname(socket.gethostname())
 
@@ -245,7 +251,8 @@ def print_tg_info():
 
 def main():
     loop = asyncio.get_event_loop()
-    task = asyncio.start_server(handle_client, "0.0.0.0", PORT, loop=loop)
+    task = asyncio.start_server(handle_client_wrapper,
+                                "0.0.0.0", PORT, loop=loop)
     server = loop.run_until_complete(task)
 
     try:
