@@ -11,6 +11,7 @@ import time
 from config import PORT, USERS
 
 BLOCK_NON_TG_HOSTS = True
+HIDE_ERRORS_BEFORE_AUTH = True
 
 # all networks are /22
 TG_NETWORKS = {
@@ -100,8 +101,9 @@ async def initial_handshake(reader, writer):
     methods = await reader.readexactly(n_methods)
 
     if USERNAME_PASSWORD_METHOD not in methods:
-        writer.write(SOCKS5_VERSION + NO_ACCEPTABLE_METHODS)
-        await writer.drain()
+        if not HIDE_ERRORS_BEFORE_AUTH:
+            writer.write(SOCKS5_VERSION + NO_ACCEPTABLE_METHODS)
+            await writer.drain()
         return False
 
     # choose user/password auth method
@@ -128,8 +130,9 @@ async def negotiate_login(reader, writer):
     password = (await reader.readexactly(password_len)).decode(errors="ignore")
 
     if user not in USERS or password != USERS[user]:
-        writer.write(SUBNEGOTIATION_VERSION + STATUS_FAIL)
-        await writer.drain()
+        if not HIDE_ERRORS_BEFORE_AUTH:
+            writer.write(SUBNEGOTIATION_VERSION + STATUS_FAIL)
+            await writer.drain()
         return ""
 
     writer.write(SUBNEGOTIATION_VERSION + STATUS_SUCCESS)
