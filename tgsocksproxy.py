@@ -262,7 +262,7 @@ async def stats_printer():
         for user, stat in stats.items():
             print("%s: %d connects (%d current), %.2f MB" % (
                 user, stat["connects"], stat["curr_connects_x2"] // 2,
-                stat["octets"] // 1000000))
+                stat["octets"] / 1000000))
         print(flush=True)
 
 
