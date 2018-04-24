@@ -75,30 +75,17 @@ def validate_addr(addr, addr_type):
 
 def init_stats():
     global stats
-    global last_stats_time
     stats = {user: collections.Counter() for user in USERS}
-    last_stats_time = time.time()
 
 
-def update_and_print_stats(user, connects=0, curr_connects_x2=0, octets=0):
+def update_stats(user, connects=0, curr_connects_x2=0, octets=0):
     global stats
-    global last_stats_time
 
     if user not in stats:
         stats[user] = collections.Counter()
 
     stats[user].update(connects=connects, curr_connects_x2=curr_connects_x2,
                        octets=octets)
-
-    if time.time() - last_stats_time > STATS_PRINT_PERIOD:
-        last_stats_time = time.time()
-
-        print("Stats for", time.strftime("%d.%m.%Y %H:%M:%S"))
-        for user, stat in stats.items():
-            print("%s: %d connects (%d current), %.2f MB" % (
-                user, stat["connects"], stat["curr_connects_x2"] // 2,
-                stat["octets"] // 1000000))
-        print(flush=True)
 
 
 async def initial_handshake(reader, writer):
@@ -225,7 +212,7 @@ async def handle_client(reader, writer):
         writer.close()
         return
 
-    update_and_print_stats(user, connects=1)
+    update_stats(user, connects=1)
 
     reader_tgt, writer_tgt = await handle_request(reader, writer)
     if reader_tgt is None or writer_tgt is None:
@@ -233,7 +220,7 @@ async def handle_client(reader, writer):
         return
 
     async def connect_reader_to_writer(rd, wr, user):
-        update_and_print_stats(user, curr_connects_x2=1)
+        update_stats(user, curr_connects_x2=1)
         try:
             while True:
                 data = await rd.read(READ_BUF_SIZE)
@@ -243,14 +230,14 @@ async def handle_client(reader, writer):
                     wr.close()
                     return
                 else:
-                    update_and_print_stats(user, octets=len(data))
+                    update_stats(user, octets=len(data))
                     wr.write(data)
                     await wr.drain()
         except (ConnectionResetError, BrokenPipeError, OSError,
                 AttributeError):
             wr.close()
         finally:
-            update_and_print_stats(user, curr_connects_x2=-1)
+            update_stats(user, curr_connects_x2=-1)
 
     asyncio.ensure_future(connect_reader_to_writer(reader_tgt, writer, user))
     asyncio.ensure_future(connect_reader_to_writer(reader, writer_tgt, user))
@@ -261,6 +248,19 @@ async def handle_client_wrapper(reader, writer):
         await handle_client(reader, writer)
     except (asyncio.IncompleteReadError, ConnectionResetError):
         writer.close()
+
+
+async def stats_printer():
+    global stats
+    while True:
+        await asyncio.sleep(STATS_PRINT_PERIOD)
+
+        print("Stats for", time.strftime("%d.%m.%Y %H:%M:%S"))
+        for user, stat in stats.items():
+            print("%s: %d connects (%d current), %.2f MB" % (
+                user, stat["connects"], stat["curr_connects_x2"] // 2,
+                stat["octets"] // 1000000))
+        print(flush=True)
 
 
 def print_tg_info():
@@ -287,6 +287,8 @@ def main():
     init_stats()
 
     loop = asyncio.get_event_loop()
+    stats_printer_task = asyncio.Task(stats_printer())
+    asyncio.ensure_future(stats_printer_task)
     task = asyncio.start_server(handle_client_wrapper,
                                 "0.0.0.0", PORT, loop=loop)
     server = loop.run_until_complete(task)
@@ -295,6 +297,8 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         pass
+
+    stats_printer_task.cancel()
 
     server.close()
     loop.run_until_complete(server.wait_closed())
