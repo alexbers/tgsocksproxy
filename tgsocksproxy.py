@@ -292,8 +292,7 @@ def main():
     loop = asyncio.get_event_loop()
     stats_printer_task = asyncio.Task(stats_printer())
     asyncio.ensure_future(stats_printer_task)
-    task = asyncio.start_server(handle_client_wrapper,
-                                "0.0.0.0", PORT, loop=loop)
+    task = asyncio.start_server(handle_client_wrapper, "0.0.0.0", PORT)
     server = loop.run_until_complete(task)
 
     try:
