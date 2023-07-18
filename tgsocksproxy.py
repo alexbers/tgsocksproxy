@@ -267,17 +267,20 @@ async def stats_printer():
 
 
 def print_tg_info():
-    my_ip = socket.gethostbyname(socket.gethostname())
+    try:
+        my_ip = socket.gethostbyname(socket.gethostname())
+        octets = [int(o) for o in my_ip.split(".")]
 
-    octets = [int(o) for o in my_ip.split(".")]
+        ip_is_local = (len(octets) == 4 and (
+            octets[0] in [127, 10] or
+            octets[0:2] == [192, 168] or
+            (octets[0] == 172 and 16 <= octets[1] <= 31)))
 
-    ip_is_local = (len(octets) == 4 and (
-        octets[0] in [127, 10] or
-        octets[0:2] == [192, 168] or
-        (octets[0] == 172 and 16 <= octets[1] <= 31)))
-
-    if ip_is_local:
+        if ip_is_local:
+            my_ip = "YOUR_IP"
+    except OSError:
         my_ip = "YOUR_IP"
+
 
     for user in USERS:
         params = {

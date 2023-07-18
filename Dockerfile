@@ -1,4 +1,4 @@
-FROM alpine:3.6
+FROM alpine:3.18
 
 RUN adduser tgsocks -u 10000 -D
 
