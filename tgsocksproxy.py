@@ -286,29 +286,24 @@ def print_tg_info():
         print("tg://socks?" + urllib.parse.urlencode(params), flush=True)
 
 
-def main():
+async def main():
     init_stats()
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     stats_printer_task = asyncio.Task(stats_printer())
     asyncio.ensure_future(stats_printer_task)
-    task = asyncio.start_server(handle_client_wrapper, "0.0.0.0", PORT)
-    server = loop.run_until_complete(task)
+
+    server = await asyncio.start_server(handle_client_wrapper, "0.0.0.0", PORT)
 
     try:
-        loop.run_forever()
+        async with server:
+            await server.serve_forever()
     except KeyboardInterrupt:
         pass
 
     stats_printer_task.cancel()
 
-    server.close()
-    loop.run_until_complete(server.wait_closed())
-    loop.close()
-
 
 if __name__ == "__main__":
     if PRINT_TG_INFO:
         print_tg_info()
-    main()
+    asyncio.run(main())
