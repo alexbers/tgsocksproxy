@@ -289,7 +289,8 @@ def print_tg_info():
 def main():
     init_stats()
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     stats_printer_task = asyncio.Task(stats_printer())
     asyncio.ensure_future(stats_printer_task)
     task = asyncio.start_server(handle_client_wrapper, "0.0.0.0", PORT)
